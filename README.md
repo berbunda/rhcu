@@ -1,4 +1,4 @@
-# rhcu
+# rhcu - Recursive Hash Calculating Utility
 Utility for compare two directories by hash-sum.
 I vibecoded it using Cursor.
 
