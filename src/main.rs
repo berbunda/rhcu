@@ -5,6 +5,7 @@ use std::fs::{File, read_dir};
 use std::io::{self, BufReader, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use std::collections::HashMap;
 
 //Определение перечисления для выбора алгоритма хеширования
 #[derive(ValueEnum, Clone, Debug)]
@@ -22,17 +23,19 @@ enum Algo {
 #[derive(Parser, Debug)]
 struct Args {
 //Используемый алгоритм хеширования
-    #[arg(value_enum, long, default_value_t = Algo::Blake3)]
+    #[arg(value_enum, short, long, default_value_t = Algo::Blake3, help = "Используемый алгоритм хеширования")]
     algo: Algo,
 
 // Отключить ANSI цвета
-    #[arg(long)]
+    #[arg(short, long, help = "Отключить ANSI цвета")]
     no_color: bool,
 
 // Первая директория
+    #[arg(short, long, required = true, help = "Первая директория для сравнения")]
     first: PathBuf,
 
 // Вторая директория
+    #[arg(short, long, required = true, help = "Вторая директория для сравнения")]
     second: PathBuf,
 }
 
@@ -57,36 +60,40 @@ fn main() -> Result<()> {
 
     let mut all_identical = true;
 
-    // Сравниваем файлы по отдельности
-    for ((path1, rel_path1), (path2, rel_path2)) in files_first.iter().zip(files_second.iter()) {
-        let hash1 = hash_file(path1, &args.algo)?;
+    // Предварительно считаем хэши для второй директории и группируем по хэшу
+    let mut second_by_hash: HashMap<String, Vec<&PathBuf>> = HashMap::new();
+    for (path2, rel_path2) in &files_second {
         let hash2 = hash_file(path2, &args.algo)?;
-        
-        let same_hash = hash1 == hash2;
-        let same_path = rel_path1 == rel_path2;
-        if same_hash {
-            if same_path {
-                println!("{ok}  identical  {}  ({})", rel_path1.display(), algo_name(&args.algo));
-            } else { 
-                println!("{ok}  identical  {}  {}  ({})", rel_path1.display(), rel_path2.display(), algo_name(&args.algo));
+        second_by_hash.entry(hash2).or_default().push(rel_path2);
+    }
+
+    // Для каждого файла из первой директории ищем совпадение по хэшу во второй
+    for (path1, rel_path1) in &files_first {
+        let hash1 = hash_file(path1, &args.algo)?;
+        if let Some(rel_list) = second_by_hash.get_mut(&hash1) {
+            if let Some(rel_path2) = rel_list.pop() {
+                let same_path = rel_path1 == rel_path2;
+                if same_path {
+                    println!("{ok}  identical  {}  ({})", rel_path1.display(), algo_name(&args.algo));
+                } else {
+                    println!("{ok}  identical  {}  {}  ({})", rel_path1.display(), rel_path2.display(), algo_name(&args.algo));
+                }
+                if rel_list.is_empty() {
+                    second_by_hash.remove(&hash1);
+                }
             }
         } else {
-            if same_path {
-                println!("{fail} different  {}  ({})", rel_path1.display(), algo_name(&args.algo));
-                all_identical = false;
-            } else {
-                print!("{fail} different {}  {}  ({})", rel_path1.display(), rel_path2.display(), algo_name(&args.algo));
-                all_identical = false;
-            }
+            println!("{fail} different  {}  ({})", rel_path1.display(), algo_name(&args.algo));
+            all_identical = false;
         }
     }
 
-        if all_identical {
-            std::process::exit(0);
-        } else {
-            std::process::exit(1);
-        }
+    if all_identical {
+        std::process::exit(0);
+    } else {
+        std::process::exit(1);
     }
+}
 
 
 //Функция для сбора файлов для сравнения (поддерживает как файлы, так и директории)
@@ -120,20 +127,6 @@ fn algo_name(algo_name: &Algo) -> &'static str {
     }
 }
 
-//Функция для хеширования файла или директории с использованием выбранного алгоритма
-/*
-#[allow(dead_code)]
-fn hash_path(path: &Path, algo: &Algo) -> Result<String> {
-    if path.is_file() {
-        hash_file(path, algo)
-    } else if path.is_dir() {
-        hash_directory(path, algo)
-    } else {
-        bail!("Path is neither a file nor a directory: {}", path.display())
-    }
-}
-*/
-
 //Функция для хеширования файла с использованием выбранного алгоритма
 fn hash_file(path: &Path, algo: &Algo) -> Result<String> {
     match algo {
@@ -146,28 +139,6 @@ fn hash_file(path: &Path, algo: &Algo) -> Result<String> {
         Algo::Sha3_512 => hash_sha3_512(&PathBuf::from(path)),
     }
 }
-
-//Функция для рекурсивного хеширования директории
-/*
-#[allow(dead_code)]
-fn hash_directory(path: &Path, algo: &Algo) -> Result<String> {
-    let mut entries: Vec<(PathBuf, PathBuf)> = Vec::new(); // (полный путь, относительный путь)
-    collect_files_recursive(path, path, &mut entries)?;
-    
-    // Сортируем по относительным путям для детерминированного порядка
-    entries.sort_by_key(|(_, rel_path)| rel_path.clone());
-    
-    match algo {
-        Algo::Blake3 => hash_directory_blake3(&entries),
-        Algo::Sha256 => hash_directory_stream::<sha2::Sha256>(&entries),
-        Algo::Sha384 => hash_directory_stream::<sha2::Sha384>(&entries),
-        Algo::Sha512 => hash_directory_stream::<sha2::Sha512>(&entries),
-        Algo::Sha3_256 => hash_directory_stream::<sha3::Sha3_256>(&entries),
-        Algo::Sha3_384 => hash_directory_stream::<sha3::Sha3_384>(&entries),
-        Algo::Sha3_512 => hash_directory_stream::<sha3::Sha3_512>(&entries),
-    }
-}
-*/
 
 //Рекурсивный сбор всех файлов из директории
 fn collect_files_recursive(root: &Path, current: &Path, entries: &mut Vec<(PathBuf, PathBuf)>) -> Result<()> {
@@ -186,68 +157,6 @@ fn collect_files_recursive(root: &Path, current: &Path, entries: &mut Vec<(PathB
     }
     Ok(())
 }
-
-//Хеширование директории с использованием Blake3
-/*
-#[allow(dead_code)]
-fn hash_directory_blake3(entries: &[(PathBuf, PathBuf)]) -> Result<String> {
-    let mut hasher = blake3::Hasher::new();
-    let mut sp = Spinner::new(Duration::from_millis(80), true);
-    
-    for (full_path, rel_path) in entries {
-        sp.tick(&format!("Processing: {}", rel_path.display()));
-        
-        // Добавляем относительный путь файла в хеш для детерминированности
-        hasher.update(rel_path.to_string_lossy().as_bytes());
-        hasher.update(b"\0");
-        
-        // Добавляем содержимое файла
-        let mut r = BufReader::new(File::open(full_path)?);
-        let mut buf = [0u8; 64 * 1024];
-        loop {
-            let n = std::io::Read::read(&mut r, &mut buf)?;
-            if n == 0 {
-                break;
-            }
-            hasher.update(&buf[..n]);
-        }
-    }
-    
-    sp.finish();
-    Ok(hasher.finalize().to_hex().to_string())
-}
-*/
-
-//Хеширование директории с использованием stream hash
-/*
-#[allow(dead_code)]
-fn hash_directory_stream<D: digest::Digest + Default>(entries: &[(PathBuf, PathBuf)]) -> Result<String> {
-    let mut hasher = D::default();
-    let mut sp = Spinner::new(Duration::from_millis(80), true);
-    
-    for (full_path, rel_path) in entries {
-        sp.tick(&format!("Processing: {}", rel_path.display()));
-        
-        // Добавляем относительный путь файла в хеш для детерминированности
-        hasher.update(rel_path.to_string_lossy().as_bytes());
-        hasher.update(b"\0");
-        
-        // Добавляем содержимое файла
-        let mut r = BufReader::new(File::open(full_path)?);
-        let mut buf = [0u8; 64 * 1024];
-        loop {
-            let n = std::io::Read::read(&mut r, &mut buf)?;
-            if n == 0 {
-                break;
-            }
-            hasher.update(&buf[..n]);
-        }
-    }
-    
-    sp.finish();
-    Ok(hex::encode(hasher.finalize()))
-}
-*/
 
 //Определение структуры для анимированного индикатора загрузки
 struct Spinner {
@@ -320,7 +229,7 @@ fn hash_blake3(path: &PathBuf) -> Result<String> {
 
 //Функция sha256 для хеширования файлов
 fn hash_sha256(path: &PathBuf) -> Result<String> {
-    use sha2::Sha256;
+    use sha2::{Sha256};
     stream_hash::<Sha256>(path)
 }
 
