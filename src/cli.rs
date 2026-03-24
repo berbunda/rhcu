@@ -49,7 +49,7 @@ pub struct ManifestArgs {
     #[arg(
         short,
         long,
-        help = "Путь к корневой директории или одном файлу в формате /dir1/targed-dir"
+        help = "Путь к корневой директории или одном файлу в формате /targed-dir или C:/target-dir"
     )]
     pub path: PathBuf,
 
@@ -57,7 +57,7 @@ pub struct ManifestArgs {
     #[arg(
         short,
         long,
-        help = "Путь к выходному JSON-файлу (UTF-8) в формате /dir1/target-dir/manifest.json"
+        help = "Путь к выходному JSON-файлу (UTF-8) в формате /target-dir/manifest.json или C:/target-dir/manifest.json"
     )]
     pub output: PathBuf,
 
