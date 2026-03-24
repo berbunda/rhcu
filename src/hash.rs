@@ -79,7 +79,8 @@ pub fn run_compare(args: &HashArgs) -> Result<bool> {
     Ok(all_identical)
 }
 
-fn collect_files_for_comparison(path: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
+/// Список файлов относительно корня (файл или дерево каталога), порядок — как при обходе, затем сортировка в вызывающем коде при необходимости.
+pub fn collect_files_for_comparison(path: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
     if path.is_file() {
         let rel_path = path
             .file_name()
@@ -96,7 +97,8 @@ fn collect_files_for_comparison(path: &Path) -> Result<Vec<(PathBuf, PathBuf)>> 
     }
 }
 
-fn algo_name(algo: &Algo) -> &'static str {
+/// Строковое имя алгоритма для вывода и JSON.
+pub fn algo_name(algo: &Algo) -> &'static str {
     match algo {
         Algo::Sha256 => "sha256",
         Algo::Sha384 => "sha384",
@@ -108,7 +110,8 @@ fn algo_name(algo: &Algo) -> &'static str {
     }
 }
 
-fn hash_file(path: &Path, algo: &Algo) -> Result<String> {
+/// Хеш содержимого файла выбранным алгоритмом.
+pub fn hash_file(path: &Path, algo: &Algo) -> Result<String> {
     let p = PathBuf::from(path);
     match algo {
         Algo::Blake3 => hash_blake3(&p),
