@@ -16,7 +16,7 @@ pub struct Cli {
 pub enum Commands {
     /// Сравнить два дерева файлов по хешам (порядок имён не важен).
     Hash(HashArgs),
-    /// Работа с манифестом (будущая реализация).
+    /// Создать JSON-манифест набора файлов в каталоге.
     Manifest(ManifestArgs),
 }
 
@@ -42,12 +42,33 @@ pub struct HashArgs {
     pub second: PathBuf,
 }
 
-/// Аргументы команды `manifest` (расширяются по мере развития функции).
+/// Аргументы команды `manifest`.
 #[derive(Parser, Debug)]
 pub struct ManifestArgs {
-    /// Путь к каталогу или файлу манифеста.
-    #[arg(short, long)]
-    pub path: Option<PathBuf>,
+    /// Корневая директория или один файл для описания.
+    #[arg(
+        short,
+        long,
+        help = "Путь к корневой директории или одном файлу в формате /dir1/targed-dir"
+    )]
+    pub path: PathBuf,
+
+    /// Путь к выходному JSON-файлу (UTF-8).
+    #[arg(
+        short,
+        long,
+        help = "Путь к выходному JSON-файлу (UTF-8) в формате /dir1/target-dir/manifest.json"
+    )]
+    pub output: PathBuf,
+
+    #[arg(
+        value_enum,
+        short,
+        long,
+        default_value_t = Algo::Blake3,
+        help = "Алгоритм хеширования для поля manifest \"algorithm\""
+    )]
+    pub algo: Algo,
 }
 
 /// Алгоритмы хеширования для команды `hash`.
