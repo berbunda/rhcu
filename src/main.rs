@@ -7,7 +7,7 @@ mod manifest;
 
 use clap::Parser;
 
-use crate::cli::{Cli, Commands};
+use crate::cli::{Cli, Commands, ManifestSubcommand};
 
 fn main() {
     match run_app() {
@@ -27,9 +27,19 @@ fn run_app() -> anyhow::Result<i32> {
             let identical = hash::run_compare(args)?;
             Ok(if identical { 0 } else { 1 })
         }
-        Commands::Manifest(args) => {
-            manifest::run(args)?;
-            Ok(0)
-        }
+        Commands::Manifest(cmd) => match &cmd.sub {
+            ManifestSubcommand::Create(args) => {
+                manifest::create(args)?;
+                Ok(0)
+            }
+            ManifestSubcommand::Verify(args) => {
+                let ok = manifest::verify(args)?;
+                Ok(if ok { 0 } else { 1 })
+            }
+            ManifestSubcommand::Update(args) => {
+                manifest::update(args)?;
+                Ok(0)
+            }
+        },
     }
 }

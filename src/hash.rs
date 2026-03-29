@@ -110,6 +110,20 @@ pub fn algo_name(algo: &Algo) -> &'static str {
     }
 }
 
+/// Распознаёт алгоритм из поля `algorithm` в манифесте.
+pub fn algo_from_manifest_name(s: &str) -> Result<Algo> {
+    match s.trim() {
+        "sha256" => Ok(Algo::Sha256),
+        "sha384" => Ok(Algo::Sha384),
+        "sha512" => Ok(Algo::Sha512),
+        "sha3-256" => Ok(Algo::Sha3_256),
+        "sha3-384" => Ok(Algo::Sha3_384),
+        "sha3-512" => Ok(Algo::Sha3_512),
+        "blake3" => Ok(Algo::Blake3),
+        other => bail!("неизвестный алгоритм в манифесте: {other:?}"),
+    }
+}
+
 /// Хеш содержимого файла выбранным алгоритмом.
 pub fn hash_file(path: &Path, algo: &Algo) -> Result<String> {
     let p = PathBuf::from(path);

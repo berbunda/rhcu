@@ -16,8 +16,8 @@ pub struct Cli {
 pub enum Commands {
     /// Сравнить два дерева файлов по хешам (порядок имён не важен).
     Hash(HashArgs),
-    /// Создать JSON-манифест набора файлов в каталоге.
-    Manifest(ManifestArgs),
+    /// Манифест: создать JSON или сверить каталог с manifest.json.
+    Manifest(ManifestCommand),
 }
 
 /// Аргументы команды `hash`.
@@ -42,22 +42,37 @@ pub struct HashArgs {
     pub second: PathBuf,
 }
 
-/// Аргументы команды `manifest`.
+/// Подкоманды `manifest`: `create` / `verify` / `update`.
 #[derive(Parser, Debug)]
-pub struct ManifestArgs {
-    /// Корневая директория или один файл для описания.
+pub struct ManifestCommand {
+    #[command(subcommand)]
+    pub sub: ManifestSubcommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ManifestSubcommand {
+    /// Записать JSON-манифест набора файлов.
+    Create(ManifestCreateArgs),
+    /// Сверить содержимое каталога с manifest.json (размер и хеш каждого файла).
+    Verify(ManifestVerifyArgs),
+    /// Пересчитать манифест по текущему дереву: `revision + 1`, новый `timestamp`.
+    Update(ManifestUpdateArgs),
+}
+
+/// Аргументы `manifest create`.
+#[derive(Parser, Debug)]
+pub struct ManifestCreateArgs {
     #[arg(
         short,
         long,
-        help = "Путь к корневой директории или одном файлу в формате /targed-dir или C:/target-dir"
+        help = "Путь к корневой директории или одному файлу (/target-dir или C:/target-dir)"
     )]
     pub path: PathBuf,
 
-    /// Путь к выходному JSON-файлу (UTF-8).
     #[arg(
         short,
         long,
-        help = "Путь к выходному JSON-файлу (UTF-8) в формате /target-dir/manifest.json или C:/target-dir/manifest.json"
+        help = "Путь к выходному JSON (UTF-8), (/target-dir/manifest.json или C:/target-dir/manifest.json)"
     )]
     pub output: PathBuf,
 
@@ -71,7 +86,43 @@ pub struct ManifestArgs {
     pub algo: Algo,
 }
 
-/// Алгоритмы хеширования для команды `hash`.
+/// Аргументы `manifest verify`.
+#[derive(Parser, Debug)]
+pub struct ManifestVerifyArgs {
+    /// Каталог (или корень, как при create), содержимое которого сверяется с манифестом.
+    #[arg(
+        short,
+        long,
+        help = "Каталог для проверки (ожидается manifest.json внутри, если не задан --manifest)"
+    )]
+    pub path: PathBuf,
+
+    /// Путь к JSON манифесту; по умолчанию `<path>/manifest.json`.
+    #[arg(short, long)]
+    pub manifest: Option<PathBuf>,
+}
+
+/// Аргументы `manifest update`.
+#[derive(Parser, Debug)]
+pub struct ManifestUpdateArgs {
+    /// Каталог для обхода (как при `create`); манифест перезаписывается.
+    #[arg(
+        short,
+        long,
+        help = "Корень дерева файлов; по умолчанию manifest.json — <path>/manifest.json"
+    )]
+    pub path: PathBuf,
+
+    /// Путь к JSON манифесту; по умолчанию `<path>/manifest.json`.
+    #[arg(short, long)]
+    pub manifest: Option<PathBuf>,
+
+    /// Заменить алгоритм хеширования (по умолчанию берётся из существующего манифеста).
+    #[arg(value_enum, short, long)]
+    pub algo: Option<Algo>,
+}
+
+/// Алгоритмы хеширования для команды `hash` и `manifest create`.
 #[derive(ValueEnum, Clone, Debug, Default)]
 pub enum Algo {
     Sha256,
