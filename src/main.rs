@@ -1,13 +1,16 @@
 //! Точка входа: модули, разбор CLI, диспетчеризация команд и коды выхода.
 
 mod cli;
+mod dedup;
+mod dedup_ref;
 mod error;
+mod fsutil;
 mod hash;
 mod manifest;
 
 use clap::Parser;
 
-use crate::cli::{Cli, Commands, ManifestSubcommand};
+use crate::cli::{Cli, Commands, FsSubcommand, ManifestSubcommand};
 
 fn main() {
     match run_app() {
@@ -39,6 +42,16 @@ fn run_app() -> anyhow::Result<i32> {
             ManifestSubcommand::Update(args) => {
                 manifest::update(args)?;
                 Ok(0)
+            }
+        },
+        Commands::Fs(cmd) => match &cmd.sub {
+            FsSubcommand::Dedup(args) => {
+                let clean = dedup::run(args)?;
+                Ok(if clean { 0 } else { 1 })
+            }
+            FsSubcommand::DedupRef(args) => {
+                let clean = dedup_ref::run(args)?;
+                Ok(if clean { 0 } else { 1 })
             }
         },
     }

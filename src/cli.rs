@@ -18,6 +18,8 @@ pub enum Commands {
     Hash(HashArgs),
     /// Манифест: создать JSON или сверить каталог с manifest.json.
     Manifest(ManifestCommand),
+    /// Операции над деревом файлов: поиск дубликатов и (в будущем) слияние директорий.
+    Fs(FsCommand),
 }
 
 /// Аргументы команды `hash`.
@@ -120,6 +122,100 @@ pub struct ManifestUpdateArgs {
     /// Заменить алгоритм хеширования (по умолчанию берётся из существующего манифеста).
     #[arg(value_enum, short, long)]
     pub algo: Option<Algo>,
+}
+
+/// Подкоманды `fs`: `dedup` (в будущем — `merge`).
+#[derive(Parser, Debug)]
+pub struct FsCommand {
+    #[command(subcommand)]
+    pub sub: FsSubcommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum FsSubcommand {
+    /// Найти и (опционально) удалить дублирующиеся файлы в дереве.
+    Dedup(DedupArgs),
+    /// Удалить в target файлы, дублирующие содержимое reference (reference не изменяется).
+    DedupRef(DedupRefArgs),
+}
+
+/// Аргументы `fs dedup`.
+#[derive(Parser, Debug)]
+pub struct DedupArgs {
+    #[arg(short, long, help = "Корневая директория или файл для поиска дубликатов")]
+    pub path: PathBuf,
+
+    #[arg(
+        value_enum,
+        short,
+        long,
+        default_value_t = Algo::Blake3,
+        help = "Используемый алгоритм хеширования"
+    )]
+    pub algo: Algo,
+
+    #[arg(short, long, help = "Отключить ANSI цвета")]
+    pub no_color: bool,
+
+    #[arg(short, long, help = "Удалить дубликаты (оставив по одному файлу в каждой группе)")]
+    pub delete: bool,
+
+    #[arg(short, long, help = "Не спрашивать подтверждения перед удалением")]
+    pub yes: bool,
+
+    #[arg(long, help = "Игнорировать файлы меньше заданного размера в байтах")]
+    pub min_size: Option<u64>,
+
+    #[arg(
+        long,
+        help = "Обходить вложенные поддиректории (по умолчанию — только верхний уровень)"
+    )]
+    pub recursive: bool,
+}
+
+/// Аргументы `fs dedup-ref`.
+#[derive(Parser, Debug)]
+pub struct DedupRefArgs {
+    #[arg(
+        short,
+        long,
+        help = "Целевая директория: отсюда удаляются файлы, дублирующие содержимое reference"
+    )]
+    pub target: PathBuf,
+
+    #[arg(
+        short,
+        long,
+        help = "Эталонная директория для сравнения; никогда не изменяется"
+    )]
+    pub reference: PathBuf,
+
+    #[arg(
+        value_enum,
+        short,
+        long,
+        default_value_t = Algo::Blake3,
+        help = "Используемый алгоритм хеширования"
+    )]
+    pub algo: Algo,
+
+    #[arg(short, long, help = "Отключить ANSI цвета")]
+    pub no_color: bool,
+
+    #[arg(short, long, help = "Удалить из target файлы, дублирующие reference")]
+    pub delete: bool,
+
+    #[arg(short, long, help = "Не спрашивать подтверждения перед удалением")]
+    pub yes: bool,
+
+    #[arg(long, help = "Игнорировать файлы меньше заданного размера в байтах")]
+    pub min_size: Option<u64>,
+
+    #[arg(
+        long,
+        help = "Обходить вложенные поддиректории в target и reference (по умолчанию — только верхний уровень)"
+    )]
+    pub recursive: bool,
 }
 
 /// Алгоритмы хеширования для команды `hash` и `manifest create`.

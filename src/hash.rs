@@ -23,16 +23,14 @@ pub fn run_compare(args: &HashArgs) -> Result<bool> {
     let files_first = collect_files_for_comparison(&args.first)?;
     let files_second = collect_files_for_comparison(&args.second)?;
 
-    if files_first.len() != files_second.len() {
+    let mut all_identical = files_first.len() == files_second.len();
+    if !all_identical {
         println!(
             "{fail} different number of files: {} vs {}",
             files_first.len(),
             files_second.len()
         );
-        return Ok(false);
     }
-
-    let mut all_identical = true;
 
     let mut second_by_hash: HashMap<String, Vec<&PathBuf>> = HashMap::new();
     for (path2, rel_path2) in &files_second {
@@ -68,7 +66,7 @@ pub fn run_compare(args: &HashArgs) -> Result<bool> {
 
         if !matched {
             println!(
-                "{fail} different  {}  ({})",
+                "{fail} only in first   {}  ({})",
                 rel_path1.display(),
                 algo_name(&args.algo)
             );
@@ -76,11 +74,29 @@ pub fn run_compare(args: &HashArgs) -> Result<bool> {
         }
     }
 
+    let mut leftover: Vec<&PathBuf> = second_by_hash.into_values().flatten().collect();
+    leftover.sort();
+    for rel_path2 in leftover {
+        println!(
+            "{fail} only in second  {}  ({})",
+            rel_path2.display(),
+            algo_name(&args.algo)
+        );
+        all_identical = false;
+    }
+
     Ok(all_identical)
 }
 
 /// Список файлов относительно корня (файл или дерево каталога), порядок — как при обходе, затем сортировка в вызывающем коде при необходимости.
+/// Всегда обходит поддиректории рекурсивно; для управляемой глубины см. [`collect_files`].
 pub fn collect_files_for_comparison(path: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
+    collect_files(path, true)
+}
+
+/// Список файлов относительно корня. При `recursive = false` учитываются только файлы
+/// непосредственно внутри `path` (для директории) — вложенные поддиректории игнорируются.
+pub fn collect_files(path: &Path, recursive: bool) -> Result<Vec<(PathBuf, PathBuf)>> {
     if path.is_file() {
         let rel_path = path
             .file_name()
@@ -89,7 +105,11 @@ pub fn collect_files_for_comparison(path: &Path) -> Result<Vec<(PathBuf, PathBuf
         Ok(vec![(path.to_path_buf(), rel_path)])
     } else if path.is_dir() {
         let mut entries: Vec<(PathBuf, PathBuf)> = Vec::new();
-        collect_files_recursive(path, path, &mut entries)?;
+        if recursive {
+            collect_files_recursive(path, path, &mut entries)?;
+        } else {
+            collect_files_top_level(path, &mut entries)?;
+        }
         entries.sort_by_key(|(_, rel_path)| rel_path.clone());
         Ok(entries)
     } else {
@@ -151,6 +171,22 @@ fn collect_files_recursive(root: &Path, current: &Path, entries: &mut Vec<(PathB
             entries.push((path, rel_path));
         } else if path.is_dir() {
             collect_files_recursive(root, &path, entries)?;
+        }
+    }
+    Ok(())
+}
+
+fn collect_files_top_level(root: &Path, entries: &mut Vec<(PathBuf, PathBuf)>) -> Result<()> {
+    for entry in read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() {
+            let rel_path = path
+                .strip_prefix(root)
+                .map_err(|_| anyhow!("Failed to get relative path"))?
+                .to_path_buf();
+            entries.push((path, rel_path));
         }
     }
     Ok(())
